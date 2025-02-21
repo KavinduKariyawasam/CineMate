@@ -31,7 +31,8 @@ def add_movie(title, released, actors, directors, writers, description=None, gen
                             MERGE (a:Person {name: actor})
                             WITH a
                             MATCH (m:Movie {title: $title})
-                            MERGE (a)-[:ACTED_IN]->(m)""", actors=actors, title=title
+                            MERGE (a)-[:ACTED_IN]->(m)
+                            MERGE (m)-[:HAS_ACTOR]->(a)""", actors=actors, title=title
                             )
                 
             # for writer in writers:
@@ -44,7 +45,8 @@ def add_movie(title, released, actors, directors, writers, description=None, gen
                             MERGE (w:Person {name: writer})
                             WITH w
                             MATCH (m:Movie {title: $title})
-                            MERGE (w)-[:WROTE]->(m)""", writers=writers, title=title
+                            MERGE (w)-[:WROTE]->(m)
+                            MERGE (m)-[:HAS_WRITER]->(w)""", writers=writers, title=title
                             )
             
             # for director in directors:
@@ -57,7 +59,8 @@ def add_movie(title, released, actors, directors, writers, description=None, gen
                             MERGE (d:Person {name: director})
                             WITH d
                             MATCH (m:Movie {title: $title})
-                            MERGE (d)-[:DIRECTED]->(m)""", directors=directors, title=title
+                            MERGE (d)-[:DIRECTED]->(m)
+                            MERGE (m)-[:HAS_DIRECTOR]->(d)""", directors=directors, title=title
                             )
                 
             # for genre in genres:
@@ -70,7 +73,8 @@ def add_movie(title, released, actors, directors, writers, description=None, gen
                             MERGE (g:Genre {name: genre})
                             WITH g
                             MATCH (m:Movie {title: $title})
-                            MERGE (m)-[:IN_GENRE]->(g)""", genres=genres, title=title
+                            MERGE (m)-[:IN_GENRE]->(g)
+                            MERGE (g)-[:HAS_MOVIE]->(m)""", genres=genres, title=title
                             )
             
             # print("Movie added successfully!")
@@ -78,7 +82,40 @@ def add_movie(title, released, actors, directors, writers, description=None, gen
 # add_movie("The Matrix", 1999, ["Keanu Reeves", "Laurence Fishburne", "Carrie-Anne Moss"], "Lana Wachowski", ["Lana Wachowski", "Lilly Wachowski"])
 # add_movie("The Matrix Reloaded", 2003, ["Keanu Reeves", "Laurence Fishburne", "Carrie-Anne Moss"], "Lana Wachowski", ["Lana Wachowski", "Lilly Wachowski"])
 
-def add_movies():
+def reverse_relation(title, released, actors, directors, writers, description=None, genres=None):
+    with GraphDatabase.driver(URI, auth=AUTH) as driver:
+        with driver.session() as session:
+            session.run("""
+                MERGE (m:Movie {title: $title}) 
+                SET m.released = $released, m.description = $description
+                
+                FOREACH (actor IN $actors | 
+                    MERGE (a:Person {name: actor}) 
+                    MERGE (m)-[:HAS_ACTOR]->(a)
+                )
+
+                FOREACH (writer IN $writers | 
+                    MERGE (w:Person {name: writer}) 
+                    MERGE (m)-[:HAS_WRITER]->(w)
+                )
+
+                FOREACH (director IN $directors | 
+                    MERGE (d:Person {name: director}) 
+                    MERGE (m)-[:HAS_DIRECTOR]->(d)
+                )
+
+                FOREACH (genre IN $genres | 
+                    MERGE (g:Genre {name: genre}) 
+                    MERGE (g)-[:HAS_MOVIE]->(m)
+                )
+            """, 
+            title=title, released=released, description=description,
+            actors=actors or [], writers=writers or [], 
+            directors=directors or [], genres=genres or []
+            )
+
+                
+def add_reverse_relation():
     with open("genres.json", "r") as file:
         genres = json.load(file)
         
@@ -94,7 +131,29 @@ def add_movies():
             genre_ids = movie["genre_ids"]
             genres_list = [genre["name"] for genre in genres if genre["id"] in genre_ids]
             
-            add_movie(title, released, actors, directors, writers, description, genres_list)
+            reverse_relation(title, released, actors, directors, writers, description, genres_list)
+
+def add_movies():
+    with open("genres.json", "r") as file:
+        genres = json.load(file)
+        
+    with open("movie_details_with_credits.json", "r") as file:
+        movies = json.load(file)
+    
+    length_ = len(movies)
+    movies = movies[:length_//2]
+     
+    for i, movie in enumerate(tqdm(movies)):
+        title = movie["title"]
+        released = movie["release_date"].split("-")[0]
+        actors = movie["actors"]
+        directors = movie["director"]
+        writers = movie["writer"]
+        description = movie["overview"]
+        genre_ids = movie["genre_ids"]
+        genres_list = [genre["name"] for genre in genres if genre["id"] in genre_ids]
+        
+        add_movie(title, released, actors, directors, writers, description, genres_list)
             
 if __name__ == "__main__":
     args = input("Enter 'reset' to reset the database or 'add' to add movies: ")
@@ -102,5 +161,7 @@ if __name__ == "__main__":
         reset_database()
     elif args == "add":
         add_movies()
+    elif args == "reverse":
+        add_reverse_relation()
     else:
         print("Invalid argument!")
