@@ -34,6 +34,8 @@ custom_cypher_prompt = PromptTemplate(
     template="""
 You are a Cypher query generator for our graph database. When converting a natural language question into a Cypher query, ensure that any properties or nodes returned are assigned meaningful aliases. For instance, when returning a director's name, do not use the raw property name (e.g., 'p.name') in the output; instead, alias it as 'director'.
 
+if it is only a greeting, please respond with "Hello! How can I assist you today?"
+
 Question: {question}
 
 Cypher Query:
@@ -58,6 +60,8 @@ Answer: "The Matrix" is a science fiction action film that depicts a dystopian f
 
 Now, based on the following, provide your answer. Be friendly and concise.
 
+if it is only a greeting, please respond with "Hello! How can I assist you today?"
+
 Question: {question}
 
 Retrieved Information: {context}
@@ -76,7 +80,6 @@ chain = GraphCypherQAChain.from_llm(
     allow_dangerous_requests=True,
     return_intermediate_results=True
 )
-
 
 chat_history = deque(maxlen=5)  
 
