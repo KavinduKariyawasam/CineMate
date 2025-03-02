@@ -3,6 +3,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 import json
 from langchain.prompts import PromptTemplate
+from collections import deque
 
 with open("config.json", "r") as file:
     config = json.load(file)
@@ -17,7 +18,7 @@ graph = Neo4jGraph(url=URI, username=USER, password=PASSWORD)
 llm = ChatGroq(
     temperature=0,
     groq_api_key=GROQ_API,
-    model_name="llama3-8b-8192",
+    model_name="llama3-70b-8192",
     timeout=None
     )
 
@@ -77,16 +78,27 @@ chain = GraphCypherQAChain.from_llm(
 )
 
 
-# result = chain.invoke({"query": "what is moana 2 about ?"})
-# print(result)
-# breakpoint()
-# print(json.dumps(result, indent=2))
-
+chat_history = deque(maxlen=5)  
 
 while True:
-    user_input = input("You: ")
-    if user_input == "exit":
+    user_input = input("You: ").strip()
+
+    if user_input.lower() == "exit":
         break
-    result = chain.invoke({"query": user_input})
-    print("Bot:", result["result"])
+
+    greetings = {"hello", "hi", "hey", "good morning", "good afternoon", "good evening", "how are you", "what's up"}
+    if user_input.lower() in greetings:
+        print("Bot: Hello! How can I assist you today?")
+        continue  
+
+    history_text = "\n".join([f"User: {msg['user']}\nBot: {msg['bot']}" for msg in chat_history])
+
+    modified_query = f"Conversation history:\n{history_text}\nCurrent question: {user_input}"
+
+    result = chain.invoke({"query": modified_query})
+    bot_response = result["result"]
+
+    chat_history.append({"user": user_input, "bot": bot_response})
+
+    print("Bot:", bot_response)
     print("\n")
